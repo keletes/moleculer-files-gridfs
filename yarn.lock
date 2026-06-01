@@ -252,9 +252,9 @@ minimatch@^3.0.4:
   dependencies:
     brace-expansion "^1.1.7"
 
-moleculer-files@keletes/moleculer-files#v0.1.6:
-  version "0.1.6"
-  resolved "https://codeload.github.com/keletes/moleculer-files/tar.gz/ca91bf68da96a841cca100273facd949d9f79357"
+moleculer-files@keletes/moleculer-files#v0.1.14:
+  version "0.1.14"
+  resolved "https://codeload.github.com/keletes/moleculer-files/tar.gz/c7450f2a486c244192fcf4ad7e75f460705ed899"
   dependencies:
     bluebird "^3.5.5"
     lodash.capitalize "^4.2.1"

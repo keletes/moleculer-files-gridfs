@@ -27,7 +27,7 @@ class FSAdapter {
     async connect() {
         this.client = new mongoClient(this.uri, this.opts);
         return this.client.connect().then(() => {
-            this.db = this.client.db(this.dbName);
+            this.db = this.client.db(this.dbName ?? this.client.options.dbName);
             this.bucketFS = new mongodb_1.GridFSBucket(this.db, {
                 bucketName: this.bucketName,
             });
@@ -55,7 +55,7 @@ class FSAdapter {
                 if (file.length > 0)
                     resolve(this.bucketFS.openDownloadStream(file[0]._id));
                 else
-                    reject(new MoleculerError("File not found", 404, "ERR_NOT_FOUND"));
+                    resolve(undefined);
             }
             catch (error) {
                 reject(error);
@@ -69,7 +69,7 @@ class FSAdapter {
                 if (file.length > 0)
                     resolve(this.bucketFS.openDownloadStreamByName(fd));
                 else
-                    reject(new MoleculerError("File not found", 404, "ERR_NOT_FOUND"));
+                    resolve(undefined);
             }
             catch (error) {
                 reject(error);
