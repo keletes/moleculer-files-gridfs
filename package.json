@@ -1,6 +1,6 @@
 {
 	"name": "moleculer-files-gridfs",
-	"version": "0.0.0",
+	"version": "0.2.0",
 	"description": "GridFS driver for moleculer-files, on the current mongodb driver (6.x)",
 	"license": "MIT",
 	"main": "dist/index.js",
