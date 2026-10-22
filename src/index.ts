@@ -1,164 +1,185 @@
-"use strict";
-
+import { randomUUID } from "node:crypto";
+import { pipeline } from "node:stream/promises";
 import { GridFSBucket, MongoClient, ObjectId } from "mongodb";
-import type { Db, Filter, Document, GridFSFile, MongoClientOptions } from "mongodb";
+import type { Db, Document, Filter, GridFSFile, MongoClientOptions, Sort } from "mongodb";
 import mime from "mime-types";
-import { v4 } from "uuid";
-import isStream from "is-stream";
 import { Errors } from "moleculer";
-import { pipeline } from 'node:stream/promises';
 import type { Service, ServiceBroker } from "moleculer";
-import type { AdapterSchema } from "moleculer-files";
+import type { AdapterSchema, QueryParams } from "moleculer-files";
+
 const { MoleculerError, ServiceSchemaError } = Errors;
 
-const mongoClient = MongoClient;
+/** Newest revision first. Revisions of a file share its `filename`, `metadata.version` counts them. */
+const LATEST_FIRST: Sort = { "metadata.version": -1 };
 
-class FSAdapter implements AdapterSchema {
-  broker: ServiceBroker;
-  bucketFS: GridFSBucket;
-  bucketName: string;
-  client: MongoClient;
-  db: Db;
-  dbName: string;
-  service: Service;
-  uri: string;
-  opts: MongoClientOptions;
+const isReadable = (value: unknown): value is NodeJS.ReadableStream =>
+	typeof value === "object" && value !== null && typeof (value as { pipe?: unknown }).pipe === "function";
 
-  constructor(uri: string, opts: MongoClientOptions) {
-    this.uri = uri;
-    this.opts = opts;
-  }
+/** Params the moleculer-files actions add on top of the GridFS filter. */
+const QUERY_KEYS = ["limit", "offset", "sort", "fields", "populate", "search", "searchFields", "page", "pageSize", "query"];
 
-  init(broker: ServiceBroker, service: Service) {
-    this.broker = broker;
-    this.service = service;
-    this.bucketName = this.service.schema.collection || "fs";
+/**
+ * GridFS storage driver for moleculer-files.
+ *
+ * The bucket is named after `collection` in the service schema (default `fs`). Files are addressed by `filename`
+ * and are versioned: saving an existing filename adds a revision (`metadata.version`), reads return the latest.
+ */
+export class GridFSAdapter implements AdapterSchema {
+	broker!: ServiceBroker;
+	bucketFS!: GridFSBucket;
+	bucketName = "fs";
+	client!: MongoClient;
+	db!: Db;
+	dbName?: string;
+	service!: Service;
+	uri: string;
+	opts: MongoClientOptions;
 
-    if (!this.uri) {
-      throw new ServiceSchemaError("Missing `uri` definition!", undefined);
-    }
-  }
+	constructor(uri: string, opts: MongoClientOptions = {}) {
+		this.uri = uri;
+		this.opts = opts;
+	}
 
-  async connect() {
-    this.client = new mongoClient(
-      this.uri,
-      this.opts
-    );
-    return this.client.connect().then(() => {
-      this.db = this.client.db(this.dbName ?? this.client.options.dbName);
+	init(broker: ServiceBroker, service: Service) {
+		this.broker = broker;
+		this.service = service;
+		this.bucketName = this.service.schema.collection || "fs";
 
-      this.bucketFS = new GridFSBucket(this.db, {
-        bucketName: this.bucketName,
-      });
+		if (!this.uri) {
+			throw new ServiceSchemaError("Missing `uri` definition!", undefined);
+		}
+	}
 
-      this.service.logger.info("GridFS adapter has connected successfully.");
+	async connect() {
+		const client = new MongoClient(this.uri, this.opts);
+		try {
+			await client.connect();
+		} catch (err) {
+			await client.close().catch(() => undefined);
+			throw err;
+		}
+		this.client = client;
+		this.db = client.db(this.dbName ?? client.options.dbName);
+		this.bucketFS = new GridFSBucket(this.db, { bucketName: this.bucketName });
 
-      /* istanbul ignore next */
-      this.client.on("close", () =>
-        this.service.logger.warn("MongoDB adapter has disconnected.")
-      );
-      this.client.on("error", (err) =>
-        this.service.logger.error("MongoDB error.", err)
-      );
-      this.client.on("reconnect", () =>
-        this.service.logger.info("MongoDB adapter has reconnected.")
-      );
-    });
-  }
+		this.service.logger.info("GridFS adapter has connected successfully.");
 
-  disconnect() {
-    return Promise.resolve();
-  }
+		/* istanbul ignore next */
+		client.on("close", () => this.service.logger.warn("MongoDB adapter has disconnected."));
+		/* istanbul ignore next */
+		client.on("error", (err) => this.service.logger.error("MongoDB error.", err));
+	}
 
-  async find(filters: Filter<GridFSFile>) {
-    try {
-      return await this.bucketFS.find(filters).sort( { "metadata.version": -1 } ).toArray();
-    } catch (error) {
-      return error;
-    }
-  }
+	async disconnect() {
+		await this.client?.close();
+	}
 
-  findOne(query: Filter<GridFSFile>) {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const file = await this.bucketFS.find(query).sort( { "metadata.version": -1 } ).toArray();
-        if( file.length > 0 )
-          resolve(this.bucketFS.openDownloadStream(file[0]._id));
-        else
-          resolve(undefined);
-      } catch (error) {
-        reject(error);
-      }
-    })
-  }
+	/** Splits the action params into the GridFS filter and the paging/sorting options. */
+	private parse(params: QueryParams = {}) {
+		const filter: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(params)) {
+			if (!QUERY_KEYS.includes(key)) filter[key] = value;
+		}
+		Object.assign(filter, params.query);
 
-  findById(fd: string) {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const file = await this.bucketFS.find({filename: fd}).sort( { "metadata.version": -1 } ).toArray();
-        if( file.length > 0 )
-          resolve(this.bucketFS.openDownloadStreamByName(fd));
-        else
-          resolve(undefined);
-      } catch (error) {
-        reject(error);
-      }
-    })
-  }
+		let sort: Sort = LATEST_FIRST;
+		if (Array.isArray(params.sort) && params.sort.length > 0) {
+			sort = Object.fromEntries(
+				params.sort.filter(Boolean).map((s) => (s.startsWith("-") ? [s.slice(1), -1] : [s, 1])),
+			);
+		}
 
-  // TODO: Implement
-  async count(_filter: Filter<GridFSFile> = {}) {
-    this.service.logger.info("`count` is not currently implemented for GridFSAdapter.");
-  }
+		return {
+			filter: filter as Filter<GridFSFile>,
+			sort,
+			limit: typeof params.limit === "number" && params.limit > 0 ? params.limit : 0,
+			skip: typeof params.offset === "number" && params.offset > 0 ? params.offset : 0,
+		};
+	}
 
-  async save(entity: NodeJS.ReadableStream, meta: Document) {
-    if (!isStream(entity)) throw new MoleculerError("Entity is not a stream", 400, "E_BAD_REQUEST");
+	/** File entries (GridFS `files` documents) matching the filter in `params`. */
+	async find(params?: QueryParams): Promise<GridFSFile[]> {
+		const { filter, sort, limit, skip } = this.parse(params);
+		return this.bucketFS.find(filter, { sort, limit, skip }).toArray();
+	}
 
-    const filename = meta.id || meta.filename || v4();
-    const contentType = meta.contentType || mime.lookup(String(filename));
+	/** Number of file entries (revisions included) matching the filter in `params`. */
+	async count(params?: QueryParams): Promise<number> {
+		const { filter } = this.parse(params);
+		return this.db.collection(`${this.bucketName}.files`).countDocuments(filter as Document);
+	}
 
-    if (meta?.$multipart) {
-      delete meta.$multipart;
-    }
+	/** Download stream of the latest file matching the query, `undefined` when there is none. */
+	async findOne(query: Filter<GridFSFile>) {
+		const [file] = await this.bucketFS.find(query, { sort: LATEST_FIRST, limit: 1 }).toArray();
+		return file ? this.bucketFS.openDownloadStream(file._id) : undefined;
+	}
 
-    // If filename exists - version it
-    try {
-      meta.version = "1"
-      let file = await this.bucketFS.find({filename: String(filename)}).sort( { "metadata.version": -1 } ).toArray();
-      // Get file latest version and increment to new file
-      if( file.length > 0 && file[0].metadata ){
-        if( file[0].metadata.version )
-          meta.version = String( (parseInt(file[0].metadata.version) || 0) + 1 )
-      }
-    } catch (error) {}
+	/** Download stream of the latest revision of the file named `fd`, `undefined` when there is none. */
+	async findById(fd: string | number) {
+		return this.findOne({ filename: String(fd) });
+	}
 
-    let stream = this.bucketFS.openUploadStream(meta.filename, {
-      metadata: meta,
-      contentType: contentType,
-    });
+	/**
+	 * Stores the stream as `meta.filename` (else `meta.id`, else a random UUID). An existing name gets a new
+	 * revision: `metadata.version` is the previous one plus one. `meta` becomes the file's `metadata` (and is
+	 * annotated with `version`).
+	 */
+	async save(entity: NodeJS.ReadableStream, meta: Document = {}): Promise<void> {
+		if (!isReadable(entity)) throw new MoleculerError("Entity is not a stream", 400, "E_BAD_REQUEST");
 
-    return pipeline(entity, stream);
-  }
+		const filename = String(meta.filename || meta.id || randomUUID());
+		const contentType = meta.contentType || mime.lookup(filename) || undefined;
 
-  async updateById(entity: NodeJS.ReadableStream, meta: Document) {
-    return await this.save(entity, meta);
-  }
+		delete meta.$multipart;
 
-  // TODO: Implement
-  removeMany(_filter: Filter<GridFSFile> = {}) {
-    this.service.logger.info("`removeMany` is not currently implemented for GridFSAdapter.");
-  }
+		const [latest] = await this.bucketFS.find({ filename }, { sort: LATEST_FIRST, limit: 1 }).toArray();
+		meta.version = latest ? String((parseInt(latest.metadata?.version) || 0) + 1) : "1";
 
-  async removeById(_id: string) {
-    const id = new ObjectId(_id);
-    this.bucketFS.delete(id);
-    return { id };
-  }
+		const upload = this.bucketFS.openUploadStream(filename, { metadata: meta, contentType });
+		try {
+			await pipeline(entity, upload);
+		} catch (err) {
+			// Do not leave the chunks of a half-written file behind
+			await upload.abort().catch(() => undefined);
+			throw err;
+		}
+	}
 
-  // TODO: Implement
-  clear() {
-    this.service.logger.info("`clear` is not currently implemented for GridFSAdapter.");
-  }
+	/** New revision of the file `id` (moleculer-files passes the id; a metadata object is accepted too). */
+	async updateById(entity: NodeJS.ReadableStream, id: string | number | Document) {
+		const meta = typeof id === "object" && id !== null ? id : { filename: String(id) };
+		return this.save(entity, meta);
+	}
+
+	/**
+	 * Removes a file: by GridFS `_id` when `id` is one that exists, else every revision of the file named `id`.
+	 * Resolves to `{ id }`, or `undefined` when nothing matched.
+	 */
+	async removeById(id: string | number | ObjectId) {
+		if (id instanceof ObjectId || (typeof id === "string" && ObjectId.isValid(id))) {
+			const _id = new ObjectId(id);
+			const exists = await this.bucketFS.find({ _id }, { limit: 1 }).hasNext();
+			if (exists) {
+				await this.bucketFS.delete(_id);
+				return { id: _id };
+			}
+		}
+		const files = await this.bucketFS.find({ filename: String(id) }).toArray();
+		if (files.length === 0) return undefined;
+		for (const file of files) await this.bucketFS.delete(file._id);
+		return { id };
+	}
+
+	// TODO: Implement
+	removeMany(_filter: Filter<GridFSFile> = {}) {
+		this.service.logger.info("`removeMany` is not currently implemented for GridFSAdapter.");
+	}
+
+	// TODO: Implement
+	clear() {
+		this.service.logger.info("`clear` is not currently implemented for GridFSAdapter.");
+	}
 }
 
-export default FSAdapter;
+export default GridFSAdapter;

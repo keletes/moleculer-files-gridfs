@@ -1,32 +1,87 @@
 {
-  "name": "moleculer-files-gridfs",
-  "version": "0.1.7",
-  "description": "GridFS driver for moleculer-files",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc & tsc -d",
-    "export:types": "tsc -d"
-  },
-  "keywords": [
-    "moleculer",
-    "moleculer-files",
-    "filesystem"
-  ],
-  "author": "Daniele Draganti",
-  "license": "MIT",
-  "dependencies": {
-    "is-stream": "^2.0.0",
-    "mime-types": "^2.1.24",
-    "mongodb": "^6.8.0",
-    "uuid": "^14.0.0"
-  },
-  "devDependencies": {
-    "@types/mime-types": "^2.1.4",
-    "@types/mongodb": "^4.0.7",
-    "@types/node": "^20.14.12",
-    "@types/uuid": "^10.0.0",
-    "moleculer": "^0.13.10",
-    "moleculer-files": "keletes/moleculer-files#v0.1.14"
-  }
+	"name": "moleculer-files-gridfs",
+	"version": "0.0.0",
+	"description": "GridFS driver for moleculer-files, on the current mongodb driver (6.x)",
+	"license": "MIT",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"prepare": "test -f dist/index.js || tsc --project tsconfig.build.json",
+		"build": "rm -rf dist && tsc --project tsconfig.build.json",
+		"typecheck": "tsc --noEmit",
+		"lint": "eslint . --ext .ts,.js",
+		"test": "jest --coverage",
+		"verify": "yarn typecheck && yarn lint",
+		"verify:int": "yarn test"
+	},
+	"keywords": [
+		"moleculer",
+		"moleculer-files",
+		"gridfs",
+		"mongodb"
+	],
+	"author": "Daniele Draganti",
+	"repository": "git@github.com:keletes/moleculer-files-gridfs.git",
+	"engines": {
+		"node": ">= 22.x.x"
+	},
+	"config": {
+		"mongodbMemoryServer": {
+			"version": "7.0.14"
+		}
+	},
+	"peerDependencies": {
+		"moleculer": "^0.14.0",
+		"moleculer-files": "*",
+		"mongodb": "^6.21.0"
+	},
+	"dependencies": {
+		"mime-types": "^3.0.1"
+	},
+	"devDependencies": {
+		"@semantic-release/commit-analyzer": "^13.0.1",
+		"@semantic-release/exec": "^6.0.3",
+		"@semantic-release/git": "^11.0.1",
+		"@semantic-release/github": "^12.0.9",
+		"@semantic-release/npm": "^13.1.5",
+		"@semantic-release/release-notes-generator": "^14.1.1",
+		"@types/jest": "^29.2.4",
+		"@types/mime-types": "^3.0.1",
+		"@types/node": "^22.0.0",
+		"@typescript-eslint/eslint-plugin": "^6.21.0",
+		"@typescript-eslint/parser": "^6.21.0",
+		"conventional-changelog-conventionalcommits": "^9.3.1",
+		"eslint": "^8.30.0",
+		"jest": "^29.3.1",
+		"moleculer": "^0.14.32",
+		"moleculer-files": "git+https://github.com/keletes/moleculer-files#feat/typescript-modernisation",
+		"mongodb": "^6.21.0",
+		"mongodb-memory-server": "11.3.0",
+		"semantic-release": "^25.0.9",
+		"ts-jest": "^29.0.3",
+		"typescript": "^5.0.0"
+	},
+	"jest": {
+		"coverageDirectory": "<rootDir>/coverage",
+		"collectCoverageFrom": [
+			"src/**/*.ts"
+		],
+		"testEnvironment": "node",
+		"globalSetup": "<rootDir>/test/global-setup.ts",
+		"globalTeardown": "<rootDir>/test/global-teardown.ts",
+		"moduleFileExtensions": [
+			"ts",
+			"js"
+		],
+		"transform": {
+			"^.+\\.ts$": "ts-jest"
+		},
+		"testMatch": [
+			"**/*.spec.ts"
+		],
+		"testTimeout": 30000
+	}
 }
