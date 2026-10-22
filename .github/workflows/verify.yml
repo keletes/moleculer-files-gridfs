@@ -1,0 +1,93 @@
+name: Verify
+
+# PR gate for master. Required status checks (branch protection): `verify`, `test (ubuntu-latest)`,
+# `test (ubuntu-24.04-arm)`.
+#   - verify : typecheck, lint, build, critical-advisory audit
+#   - test   : jest against a real throwaway mongod (mongodb-memory-server), on x64 AND arm64 runners so both
+#              architectures are exercised. The mongod binary is cached per OS/arch/pinned version; the first
+#              run on a cold cache downloads it.
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 22: semantic-release and its plugins (ordinary devDependencies) need it, and yarn 1.x treats an
+      # unmet engines range as a hard install failure.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+        env:
+          MONGOMS_DISABLE_POSTINSTALL: "1" # no mongod needed here
+
+      - name: Typecheck
+        run: yarn typecheck
+
+      - name: Lint
+        run: yarn lint
+
+      - name: Build
+        run: yarn build
+
+      - name: Security audit (fail on critical)
+        run: |
+          report=$(yarn audit --json --groups dependencies || true)
+          printf '%s\n' "$report" \
+            | jq -r 'fromjson? | select(.type=="auditAdvisory") | .data.advisory
+                     | "\(.severity)\t\(.module_name) \(.vulnerable_versions) - \(.title) (\(.url))"' \
+            > advisories.txt || true
+          echo "Advisory summary:"; cut -f1 advisories.txt | sort | uniq -c || true
+          crit=$(grep -c '^critical' advisories.txt || true)
+          if [ "${crit:-0}" -gt 0 ]; then
+            echo "::error::${crit} critical advisory/advisories in production dependencies:"
+            grep '^critical' advisories.txt | cut -f2-
+            exit 1
+          fi
+          echo "No critical advisories."
+
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      # mongodb-memory-server stores the binary here; the key carries the arch and the pinned version
+      # (package.json config.mongodbMemoryServer.version), so a pin bump or a different runner arch re-downloads.
+      - name: Cache mongod binary
+        uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/mongodb-memory-server
+          key: mongod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package.json') }}
+
+      # The postinstall of mongodb-memory-server fetches the pinned mongod into the cached folder (no-op on a hit).
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Test
+        run: yarn test
