@@ -40,7 +40,7 @@
 	},
 	"peerDependencies": {
 		"moleculer": "^0.14.0",
-		"@keletes/moleculer-files": "^0.3.0",
+		"@keletes/moleculer-files": ">=0.3.0",
 		"mongodb": "^6.21.0"
 	},
 	"dependencies": {
