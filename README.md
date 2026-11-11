@@ -1,26 +1,26 @@
 # moleculer-files-gridfs
 
-GridFS driver for [`moleculer-files`](https://github.com/keletes/moleculer-files), on the **current `mongodb` driver (6.x)**:
+GridFS driver for [`@keletes/moleculer-files`](https://github.com/keletes/moleculer-files), on the **current `mongodb` driver (6.x)**:
 it uses *your* `mongodb` dependency, one driver in the tree. TypeScript, compiled output and declarations included.
 
 ## Install
 
-Not on npm; installed from a git tag (compiled output is committed on the release commit, no build step, no auth: the repo is public).
+Published to GitHub Packages as `@keletes/moleculer-files-gridfs` (compiled output included). Add `@keletes:registry=https://npm.pkg.github.com` to your `.npmrc` and authenticate with a token that has `read:packages`.
 
 ```json
-"moleculer-files-gridfs": "git+https://github.com/keletes/moleculer-files-gridfs.git#vX.Y.Z",
-"moleculer-files": "git+https://github.com/keletes/moleculer-files.git#vX.Y.Z",
+"@keletes/moleculer-files-gridfs": "^X.Y.Z",
+"@keletes/moleculer-files": "^0.3.0",
 "mongodb": "^6.21.0",
 "moleculer": "^0.14.32"
 ```
 
-Node >= 22. `mongodb`, `moleculer` and `moleculer-files` are peer dependencies.
+Node >= 22. `mongodb`, `moleculer` and `@keletes/moleculer-files` are peer dependencies.
 
 ## Usage
 
 ```ts
-import FilesService from "moleculer-files";
-import GridFs from "moleculer-files-gridfs"; // or { GridFSAdapter }
+import FilesService from "@keletes/moleculer-files";
+import GridFs from "@keletes/moleculer-files-gridfs"; // or { GridFSAdapter }
 
 export default {
 	name: "cad",

@@ -31,11 +31,14 @@ jobs:
         with:
           node-version: 22
           cache: yarn
+          registry-url: https://npm.pkg.github.com
+          scope: '@keletes'
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
         env:
           MONGOMS_DISABLE_POSTINSTALL: "1" # no mongod needed here
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
 
       - name: Typecheck
         run: yarn typecheck
@@ -76,6 +79,8 @@ jobs:
         with:
           node-version: 22
           cache: yarn
+          registry-url: https://npm.pkg.github.com
+          scope: '@keletes'
 
       # mongodb-memory-server stores the binary here; the key carries the arch and the pinned version
       # (package.json config.mongodbMemoryServer.version), so a pin bump or a different runner arch re-downloads.
@@ -88,6 +93,8 @@ jobs:
       # The postinstall of mongodb-memory-server fetches the pinned mongod into the cached folder (no-op on a hit).
       - name: Install dependencies
         run: yarn install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
 
       - name: Test
         run: yarn test

@@ -1,13 +1,13 @@
 # moleculer-files-gridfs
 
-`moleculer-files-gridfs`: GridFS storage driver for [`moleculer-files`](https://github.com/keletes/moleculer-files), on the current `mongodb` driver (6.x). Used by business-cad, business-documentation and utilities-buffer. Design and usage are in `README.md`.
+`@keletes/moleculer-files-gridfs`: GridFS storage driver for [`@keletes/moleculer-files`](https://github.com/keletes/moleculer-files), on the current `mongodb` driver (6.x). Used by business-cad, business-documentation and utilities-buffer. Design and usage are in `README.md`.
 
 ## Shape of this repo (like `@keletes/moleculer-db-adapter-mongo`)
 
-- **No npm registry.** Consumers install from a git tag: `"moleculer-files-gridfs": "git+https://github.com/keletes/moleculer-files-gridfs.git#vX.Y.Z"`. Public repo, so no `PACKAGES_READ_PAT` anywhere.
-- **`dist/` is built and committed by the release commit only** (`@semantic-release/exec` runs `yarn build`, `@semantic-release/git` force-adds `dist/**`). `dist/` is gitignored on purpose: do NOT commit it in PRs.
+- **Published to GitHub Packages** as `@keletes/moleculer-files-gridfs` (`"@keletes/moleculer-files-gridfs": "^X.Y.Z"`); `.npmrc` maps the `@keletes` scope to `https://npm.pkg.github.com`, no token in the repo. Installing `@keletes/*` in CI needs the org secret `PACKAGES_READ_TOKEN` (`NODE_AUTH_TOKEN` on install steps).
+- **`dist/` is built at release time** (`@semantic-release/exec` runs `yarn build`) and shipped in the published package only; it is gitignored, never committed. `package.json` `version` is the placeholder `0.0.0-development`.
 - `yarn.lock` is committed (CI installs with `--frozen-lockfile`).
-- `mongodb`, `moleculer` and `moleculer-files` are peer dependencies; `moleculer-files` is also a devDependency pinned to a tag of the base repo (`git+https://github.com/keletes/moleculer-files#vX.Y.Z`), bump it when the base releases something the driver needs.
+- `mongodb`, `moleculer` and `@keletes/moleculer-files` are peer dependencies; `@keletes/moleculer-files` is also a devDependency (`^0.3.0`), bump the range when the base releases something the driver needs.
 
 ## Commands
 
@@ -38,9 +38,9 @@ CI (`verify.yml`) runs `verify` plus `test` on ubuntu x64 and ubuntu-24.04-arm; 
 | `feat!:` or `BREAKING CHANGE:` footer | major |
 | `chore:`, `docs:`, `style:`, `refactor:`, `perf:`, `test:`, `ci:`, `build:` | no release |
 
-On a release, semantic-release builds `dist/`, commits `package.json` + `dist/` as `chore(release): X.Y.Z [skip ci]`, tags `vX.Y.Z` and publishes a GitHub Release. **Never bump the version or push a `v*` tag by hand.**
+On a release, semantic-release builds `dist/`, publishes the package to GitHub Packages, tags `vX.Y.Z` and publishes a GitHub Release. No release commit is pushed. **Never bump the version or push a `v*` tag by hand.**
 
-`tag.yml` pushes through the branch ruleset with the GitHub App token (org secrets `DEPLOY_APP_ID`, `DEPLOY_APP_PRIVATE_KEY`; the app is a bypass actor of the ruleset and must be installed on this repo). Node 22 is required for `yarn install`.
+`tag.yml` creates the tag and release with the GitHub App token (org secrets `DEPLOY_APP_ID`, `DEPLOY_APP_PRIVATE_KEY`; the app must be installed on this repo) and publishes with `GITHUB_TOKEN` (`packages: write`). Node 22 is required for `yarn install`.
 
 ## Branching: check merge status first
 
