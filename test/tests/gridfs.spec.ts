@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { PassThrough, Readable } from "node:stream";
 import { Errors, ServiceBroker } from "moleculer";
 import type { Service } from "moleculer";
-import FilesService, { FileNotFoundError } from "moleculer-files";
+import FilesService, { FileNotFoundError } from "@keletes/moleculer-files";
 import { MongoClient } from "mongodb";
 import GridFSAdapter from "../../src";
 

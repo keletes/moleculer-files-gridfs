@@ -5,7 +5,7 @@ import type { Db, Document, Filter, GridFSFile, MongoClientOptions, Sort } from 
 import mime from "mime-types";
 import { Errors } from "moleculer";
 import type { Service, ServiceBroker } from "moleculer";
-import type { AdapterSchema, QueryParams } from "moleculer-files";
+import type { AdapterSchema, QueryParams } from "@keletes/moleculer-files";
 
 const { MoleculerError, ServiceSchemaError } = Errors;
 
