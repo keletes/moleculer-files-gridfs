@@ -108,6 +108,18 @@ describe("moleculer-files-gridfs", () => {
 		expect(await adapter.count({ filename: "u.txt" })).toBe(2);
 	});
 
+	it("stat returns the latest revision's name, type, size and metadata", async () => {
+		await save("v1", { filename: "s.txt", owner: "me" });
+		await save("version two", { filename: "s.txt", owner: "you" });
+		expect(await adapter.stat("s.txt")).toMatchObject({
+			filename: "s.txt",
+			contentType: "text/plain",
+			size: 11,
+			metadata: { owner: "you", version: "2" },
+		});
+		expect(await adapter.stat("missing.txt")).toBeUndefined();
+	});
+
 	describe("errors", () => {
 		it("get of a missing file is a 404 FileNotFoundError", async () => {
 			await expect(broker.call("files.get", { id: "missing.txt" })).rejects.toBeInstanceOf(FileNotFoundError);

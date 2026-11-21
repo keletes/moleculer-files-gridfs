@@ -39,6 +39,7 @@ After connecting, `this.adapter.client`, `.db` and `.bucketFS` are the driver ob
 - **`find`/`count`/`list`.** Params other than `limit`, `offset`, `sort`, `query`, `fields`, ... are a GridFS filter on the `<bucket>.files` documents (for example `{ "metadata.parameters.color": "red" }`, `$or`).
   `sort` defaults to newest revision first.
 - **`remove`.** By GridFS `_id` (hex string) when one matches, otherwise every revision of the file named `id`. Missing file: 404.
+- **`stat(id)`.** Optional adapter method: `{ filename, contentType, size, metadata }` of the latest revision of the file named `id` (`size` is the GridFS `length`), `undefined` when missing.
 - **Streams.** `save` pipes with backpressure; if the source stream fails the half-written upload (chunks) is aborted. `get` returns the driver's download stream; read errors are emitted on it.
 - `disconnect` closes the MongoDB client.
 
