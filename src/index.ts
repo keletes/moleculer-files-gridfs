@@ -120,6 +120,19 @@ export class GridFSAdapter implements AdapterSchema {
 		return this.findOne({ filename: String(fd) });
 	}
 
+	/** Name, content type, size and stored metadata of the latest revision of the file named `fd`; `undefined` when there is none. */
+	async stat(fd: string | number) {
+		const [file] = await this.bucketFS.find({ filename: String(fd) }, { sort: LATEST_FIRST, limit: 1 }).toArray();
+		if (!file) return undefined;
+		const contentType = (file as { contentType?: string }).contentType ?? file.metadata?.contentType;
+		return {
+			filename: file.filename,
+			contentType: typeof contentType === "string" ? contentType : undefined,
+			size: file.length,
+			metadata: file.metadata as Record<string, unknown> | undefined,
+		};
+	}
+
 	/**
 	 * Stores the stream as `meta.filename` (else `meta.id`, else a random UUID). An existing name gets a new
 	 * revision: `metadata.version` is the previous one plus one. `meta` becomes the file's `metadata` (and is
