@@ -101,6 +101,17 @@ describe("moleculer-files-gridfs", () => {
 		expect(revisions.map((f) => f.metadata?.version)).toEqual(["3", "2", "1"]);
 	});
 
+	it("orders revisions numerically past version 9", async () => {
+		for (let i = 1; i <= 11; i++) await save(`v${i}`, { filename: "many.txt" });
+		expect((await get("many.txt")).toString()).toBe("v11");
+		const expected = Array.from({ length: 11 }, (_, i) => String(11 - i));
+		const desc = await adapter.find({ filename: "many.txt" });
+		expect(desc.map((f) => f.metadata?.version)).toEqual(expected);
+		const asc = await adapter.find({ filename: "many.txt", sort: ["metadata.version"] });
+		expect(asc.map((f) => f.metadata?.version)).toEqual([...expected].reverse());
+		expect((await adapter.stat("many.txt"))?.metadata?.version).toBe("11");
+	});
+
 	it("update stores a new revision of the file", async () => {
 		await save("old", { filename: "u.txt" });
 		await broker.call("files.update", Readable.from([Buffer.from("new")]), { meta: { id: "u.txt" } });

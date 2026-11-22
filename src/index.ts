@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { pipeline } from "node:stream/promises";
 import { GridFSBucket, MongoClient, ObjectId } from "mongodb";
-import type { Db, Document, Filter, GridFSFile, MongoClientOptions, Sort } from "mongodb";
+import type { CollationOptions, Db, Document, Filter, GridFSFile, MongoClientOptions, Sort } from "mongodb";
 import mime from "mime-types";
 import { Errors } from "moleculer";
 import type { Service, ServiceBroker } from "moleculer";
@@ -11,6 +11,16 @@ const { MoleculerError, ServiceSchemaError } = Errors;
 
 /** Newest revision first. Revisions of a file share its `filename`, `metadata.version` counts them. */
 const LATEST_FIRST: Sort = { "metadata.version": -1 };
+
+/** `metadata.version` is a string: without numeric collation "10" sorts below "9". */
+const NUMERIC: CollationOptions = { locale: "en", numericOrdering: true };
+
+/** Find options sorting by `sort`, with numeric collation when the sort involves `metadata.version`. */
+const sorted = (sort: Sort, extra: { limit?: number; skip?: number } = {}) => ({
+	sort,
+	...extra,
+	...(typeof sort === "object" && "metadata.version" in sort ? { collation: NUMERIC } : {}),
+});
 
 const isReadable = (value: unknown): value is NodeJS.ReadableStream =>
 	typeof value === "object" && value !== null && typeof (value as { pipe?: unknown }).pipe === "function";
@@ -100,7 +110,7 @@ export class GridFSAdapter implements AdapterSchema {
 	/** File entries (GridFS `files` documents) matching the filter in `params`. */
 	async find(params?: QueryParams): Promise<GridFSFile[]> {
 		const { filter, sort, limit, skip } = this.parse(params);
-		return this.bucketFS.find(filter, { sort, limit, skip }).toArray();
+		return this.bucketFS.find(filter, sorted(sort, { limit, skip })).toArray();
 	}
 
 	/** Number of file entries (revisions included) matching the filter in `params`. */
@@ -111,7 +121,7 @@ export class GridFSAdapter implements AdapterSchema {
 
 	/** Download stream of the latest file matching the query, `undefined` when there is none. */
 	async findOne(query: Filter<GridFSFile>) {
-		const [file] = await this.bucketFS.find(query, { sort: LATEST_FIRST, limit: 1 }).toArray();
+		const [file] = await this.bucketFS.find(query, sorted(LATEST_FIRST, { limit: 1 })).toArray();
 		return file ? this.bucketFS.openDownloadStream(file._id) : undefined;
 	}
 
@@ -122,7 +132,7 @@ export class GridFSAdapter implements AdapterSchema {
 
 	/** Name, content type, size and stored metadata of the latest revision of the file named `fd`; `undefined` when there is none. */
 	async stat(fd: string | number) {
-		const [file] = await this.bucketFS.find({ filename: String(fd) }, { sort: LATEST_FIRST, limit: 1 }).toArray();
+		const [file] = await this.bucketFS.find({ filename: String(fd) }, sorted(LATEST_FIRST, { limit: 1 })).toArray();
 		if (!file) return undefined;
 		const contentType = (file as { contentType?: string }).contentType ?? file.metadata?.contentType;
 		return {
@@ -146,7 +156,7 @@ export class GridFSAdapter implements AdapterSchema {
 
 		delete meta.$multipart;
 
-		const [latest] = await this.bucketFS.find({ filename }, { sort: LATEST_FIRST, limit: 1 }).toArray();
+		const [latest] = await this.bucketFS.find({ filename }, sorted(LATEST_FIRST, { limit: 1 })).toArray();
 		meta.version = latest ? String((parseInt(latest.metadata?.version) || 0) + 1) : "1";
 
 		const upload = this.bucketFS.openUploadStream(filename, { metadata: meta, contentType });
