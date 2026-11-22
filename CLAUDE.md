@@ -25,7 +25,7 @@ CI (`verify.yml`) runs `verify` plus `test` on ubuntu x64 and ubuntu-24.04-arm; 
 - The CI mongod cache key is `hashFiles('package.json')`; any package.json change re-downloads once.
 - Moleculer copies the adapter instance when it merges the service schema: in tests use `service.adapter`, not the instance you passed in.
 - Consumers reach into `adapter.bucketFS`, `adapter.db` and `adapter.client` (utilities-buffer); keep them public.
-- Files are addressed by `filename` and versioned (`metadata.version`, a string); `get` returns the latest revision. `remove` takes a GridFS `_id` (hex) or a filename (all revisions).
+- Files are addressed by `filename` and versioned (`metadata.version`, a string); `get` returns the latest revision. Every find sorted by `metadata.version` must carry the numeric collation (`sorted()` in `src/index.ts`): strings sort lexicographically otherwise ("9" above "10"). `remove` takes a GridFS `_id` (hex) or a filename (all revisions).
 
 ## Releases: trunk-based, Conventional Commits
 
