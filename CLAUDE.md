@@ -1,13 +1,13 @@
 # moleculer-files-gridfs
 
-`@keletes/moleculer-files-gridfs`: GridFS storage driver for [`@keletes/moleculer-files`](https://github.com/keletes/moleculer-files), on the current `mongodb` driver (6.x). Used by business-cad, business-documentation and utilities-buffer. Design and usage are in `README.md`.
+`@keletes/moleculer-files-gridfs`: GridFS storage driver for [`@keletes/moleculer-files`](https://github.com/keletes/moleculer-files), on the current `mongodb` driver (6.x). Design and usage are in `README.md`.
 
 ## Shape of this repo (like `@keletes/moleculer-db-adapter-mongo`)
 
 - **Published to GitHub Packages** as `@keletes/moleculer-files-gridfs` (`"@keletes/moleculer-files-gridfs": "^X.Y.Z"`); `.npmrc` maps the `@keletes` scope to `https://npm.pkg.github.com`, no token in the repo. Installing `@keletes/*` in CI needs the org secret `PACKAGES_READ_TOKEN` (`NODE_AUTH_TOKEN` on install steps).
 - **`dist/` is built at release time** (`@semantic-release/exec` runs `yarn build`) and shipped in the published package only; it is gitignored, never committed. `package.json` `version` is the placeholder `0.0.0-development`.
 - `yarn.lock` is committed (CI installs with `--frozen-lockfile`).
-- `mongodb`, `moleculer` and `@keletes/moleculer-files` are peer dependencies; `@keletes/moleculer-files` is also a devDependency (`^0.3.0`), bump the range when the base releases something the driver needs.
+- `mongodb`, `moleculer` and `@keletes/moleculer-files` are peer dependencies; `@keletes/moleculer-files` is also a devDependency (`^0.5.0`, the release with `findFiles`/`removeFiles`), bump the range when the base releases something the driver needs.
 
 ## Commands
 
@@ -24,8 +24,8 @@ CI (`verify.yml`) runs `verify` plus `test` on ubuntu x64 and ubuntu-24.04-arm; 
 - **mongod version is pinned in `package.json` `config.mongodbMemoryServer.version`**, read by both mongodb-memory-server's postinstall and `test/pin.ts`/`test/global-setup.ts`. Do not hard-code the version elsewhere. `MONGOMS_VERSION` overrides. `test/tests/mongod-pin.spec.ts` fails if the running mongod is not the pinned version or not built for the host arch. When bumping the pin, check a build exists for `ubuntu-24.04` on both x64 and arm64.
 - The CI mongod cache key is `hashFiles('package.json')`; any package.json change re-downloads once.
 - Moleculer copies the adapter instance when it merges the service schema: in tests use `service.adapter`, not the instance you passed in.
-- Consumers reach into `adapter.bucketFS`, `adapter.db` and `adapter.client` (utilities-buffer); keep them public.
-- Files are addressed by `filename` and versioned (`metadata.version`, a string); `get` returns the latest revision. Every find sorted by `metadata.version` must carry the numeric collation (`sorted()` in `src/index.ts`): strings sort lexicographically otherwise ("9" above "10"). `remove` takes a GridFS `_id` (hex) or a filename (all revisions).
+- Consumers reach into `adapter.bucketFS`, `adapter.db` and `adapter.client`; keep them public.
+- Files are addressed by `filename` and versioned (`metadata.version`, a string); `get` returns the latest revision. Every find sorted by `metadata.version` must carry the numeric collation (`sorted()` in `src/index.ts`): strings sort lexicographically otherwise ("9" above "10"). `remove` takes a GridFS `_id` (hex) or a filename (all revisions). `find` lists every revision (ObjectId `_id`) unless a string `prefix` is given: then it is a per-file listing (latest revision, `_id` = filename, via aggregate with the numeric collation) so the base's `findFiles` ids match `stat`/`findById`/`removeMany`. Keep that split: other consumers rely on the revision listing.
 
 ## Releases: trunk-based, Conventional Commits
 

@@ -9,7 +9,7 @@ Published to GitHub Packages as `@keletes/moleculer-files-gridfs` (compiled outp
 
 ```json
 "@keletes/moleculer-files-gridfs": "^X.Y.Z",
-"@keletes/moleculer-files": "^0.3.0",
+"@keletes/moleculer-files": "^0.5.0",
 "mongodb": "^6.21.0",
 "moleculer": "^0.14.32"
 ```
@@ -38,8 +38,13 @@ After connecting, `this.adapter.client`, `.db` and `.bucketFS` are the driver ob
   (`metadata.version`, `"1"`, `"2"`, ...); `get` returns the newest. `meta` (minus `$multipart`) is stored as the file's `metadata`; `contentType` comes from `meta.contentType`, else the extension.
 - **`find`/`count`/`list`.** Params other than `limit`, `offset`, `sort`, `query`, `fields`, ... are a GridFS filter on the `<bucket>.files` documents (for example `{ "metadata.parameters.color": "red" }`, `$or`).
   `sort` defaults to newest revision first.
+- **Per-file listing (`find({ prefix })`).** With a string `prefix`, `find` returns one entry per file instead of one per revision: filenames starting with `prefix` (literal, regex characters are escaped),
+  the latest revision of each (numeric `metadata.version` order), sorted by filename, each entry being that revision's `files` document with `_id` set to the filename. That is what `findFiles({ prefix })` of
+  `@keletes/moleculer-files` (>= 0.5) reads as the file id, so ids from `findFiles` feed `stat`, `findById` and `removeFiles`. Other params still filter the revisions before the latest is picked; `limit`/`offset` page
+  the per-file list, `sort` is ignored. Without `prefix`, `find` is unchanged (every revision, `ObjectId` `_id`).
+- **`removeMany(filenames)`.** Used by `removeFiles`: deletes every revision of each filename and its chunks in two bulk deletes; resolves to the filenames that existed, unknown ones are ignored.
 - **`remove`.** By GridFS `_id` (hex string) when one matches, otherwise every revision of the file named `id`. Missing file: 404.
-- **`stat(id)`.** Optional adapter method: `{ filename, contentType, size, metadata }` of the latest revision of the file named `id` (`size` is the GridFS `length`), `undefined` when missing.
+- **`stat(id)`.** Optional adapter method: `{ filename, contentType, size, metadata }` of the latest revision of the file named `id` (`size` is the GridFS `length`), `undefined` when missing. Metadata is stored as native BSON, so values keep their types and need no encoding.
 - **Streams.** `save` pipes with backpressure; if the source stream fails the half-written upload (chunks) is aborted. `get` returns the driver's download stream; read errors are emitted on it.
 - `disconnect` closes the MongoDB client.
 
