@@ -253,6 +253,51 @@ describe("moleculer-files-gridfs", () => {
 		});
 	});
 
+	describe("per-file listing and bulk remove", () => {
+		beforeEach(async () => {
+			for (let i = 1; i <= 11; i++) await save(`v${i}`, { filename: "docs/a.txt", rev: i });
+			await save("b", { filename: "docs/b.txt", owner: "me" });
+			await save("x", { filename: "docs.b/x.txt" });
+			await save("y", { filename: "docsXb/y.txt" });
+			await save("o", { filename: "other.txt" });
+		});
+
+		it("find with a prefix returns one entry per file, the latest revision, id = filename", async () => {
+			const rows = await adapter.find({ prefix: "docs/" });
+			expect(rows.map((r) => r._id)).toEqual(["docs/a.txt", "docs/b.txt"]);
+			expect(rows[0]).toMatchObject({ filename: "docs/a.txt", length: 3, metadata: { rev: 11, version: "11" } });
+		});
+
+		it("treats regex characters of the prefix literally", async () => {
+			expect((await adapter.find({ prefix: "docs.b/" })).map((r) => r.filename)).toEqual(["docs.b/x.txt"]);
+			expect(await adapter.find({ prefix: "docs(" })).toEqual([]);
+			expect((await adapter.find({ prefix: "" })).map((r) => r.filename)).toHaveLength(5);
+		});
+
+		it("pages the per-file list and combines the prefix with a filter", async () => {
+			expect((await adapter.find({ prefix: "docs", limit: 1, offset: 1 })).map((r) => r.filename)).toEqual(["docs/a.txt"]);
+			expect((await adapter.find({ prefix: "docs/", "metadata.owner": "me" })).map((r) => r.filename)).toEqual(["docs/b.txt"]);
+		});
+
+		it("findFiles through the mixin lists one entry per file, with the latest metadata on stat", async () => {
+			const entries = await (svc as any).findFiles({ prefix: "docs/" });
+			expect(entries).toEqual([
+				{ id: "docs/a.txt", filename: "docs/a.txt", size: 3 },
+				{ id: "docs/b.txt", filename: "docs/b.txt", size: 1 },
+			]);
+			const details = await (svc as any).findFiles({ prefix: "docs/" }, { stat: true });
+			expect(details[0]).toMatchObject({ id: "docs/a.txt", filename: "docs/a.txt", contentType: "text/plain", size: 3, metadata: { rev: 11 } });
+		});
+
+		it("removeFiles removes every revision and chunk, ignoring missing names", async () => {
+			const removed = await (svc as any).removeFiles(["docs/a.txt", "missing.txt", "other.txt"]);
+			expect(removed.sort()).toEqual(["docs/a.txt", "other.txt"]);
+			expect((await adapter.find({})).map((f) => f.filename).sort()).toEqual(["docs.b/x.txt", "docsXb/y.txt", "docs/b.txt"].sort());
+			expect(await adapter.db.collection(`${bucket}.chunks`).countDocuments()).toBe(3);
+			expect(await adapter.removeMany([])).toEqual([]);
+		});
+	});
+
 	describe("lifecycle", () => {
 		it("disconnect closes the driver client", async () => {
 			const closed = jest.spyOn(adapter.client, "close");
@@ -261,8 +306,7 @@ describe("moleculer-files-gridfs", () => {
 			// stopping twice (afterEach) is harmless
 		});
 
-		it("not-implemented helpers only log", () => {
-			expect(() => adapter.removeMany()).not.toThrow();
+		it("`clear` only logs", () => {
 			expect(() => adapter.clear()).not.toThrow();
 		});
 	});

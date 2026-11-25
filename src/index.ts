@@ -22,6 +22,8 @@ const sorted = (sort: Sort, extra: { limit?: number; skip?: number } = {}) => ({
 	...(typeof sort === "object" && "metadata.version" in sort ? { collation: NUMERIC } : {}),
 });
 
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const isReadable = (value: unknown): value is NodeJS.ReadableStream =>
 	typeof value === "object" && value !== null && typeof (value as { pipe?: unknown }).pipe === "function";
 
@@ -107,10 +109,31 @@ export class GridFSAdapter implements AdapterSchema {
 		};
 	}
 
-	/** File entries (GridFS `files` documents) matching the filter in `params`. */
+	/**
+	 * File entries (GridFS `files` documents) matching the filter in `params`, every revision.
+	 *
+	 * With a string `prefix` the listing is per file instead: the entries whose `filename` starts with `prefix`
+	 * (taken literally) and that match the rest of the filter, reduced to the latest revision of each filename,
+	 * ordered by filename. Each entry is that revision's `files` document with `_id` replaced by the filename, the
+	 * id `stat`, `findById` and `removeById` take. `limit`/`offset` page that list; `sort` is ignored.
+	 */
 	async find(params?: QueryParams): Promise<GridFSFile[]> {
 		const { filter, sort, limit, skip } = this.parse(params);
-		return this.bucketFS.find(filter, sorted(sort, { limit, skip })).toArray();
+		const prefix = (params as { prefix?: unknown } | undefined)?.prefix;
+		if (typeof prefix !== "string") return this.bucketFS.find(filter, sorted(sort, { limit, skip })).toArray();
+
+		const { prefix: _prefix, ...rest } = filter as Record<string, unknown>;
+		const match = { $and: [rest, { filename: { $regex: `^${escapeRegExp(prefix)}` } }] };
+		const pipeline: Document[] = [
+			{ $match: match },
+			{ $sort: LATEST_FIRST },
+			{ $group: { _id: "$filename", file: { $first: "$$ROOT" } } },
+			{ $sort: { _id: 1 } },
+			...(skip ? [{ $skip: skip }] : []),
+			...(limit ? [{ $limit: limit }] : []),
+			{ $replaceRoot: { newRoot: { $mergeObjects: ["$file", { _id: "$_id" }] } } },
+		];
+		return this.db.collection(`${this.bucketName}.files`).aggregate(pipeline, { collation: NUMERIC }).toArray() as Promise<GridFSFile[]>;
 	}
 
 	/** Number of file entries (revisions included) matching the filter in `params`. */
@@ -194,9 +217,20 @@ export class GridFSAdapter implements AdapterSchema {
 		return { id };
 	}
 
-	// TODO: Implement
-	removeMany(_filter: Filter<GridFSFile> = {}) {
-		this.service.logger.info("`removeMany` is not currently implemented for GridFSAdapter.");
+	/**
+	 * Removes every revision of each file named in `filenames`, chunks included, in one pass over the `files` and
+	 * `chunks` collections. Resolves to the filenames that existed; unknown ones are ignored.
+	 */
+	async removeMany(filenames: Array<string | number>): Promise<string[]> {
+		const names = filenames.map(String);
+		if (names.length === 0) return [];
+		const files = await this.bucketFS.find({ filename: { $in: names } }).toArray();
+		if (files.length === 0) return [];
+		const ids = files.map((f) => f._id);
+		// `files` first: a failure in between leaves orphan chunks, never a listed file without its data
+		await this.db.collection(`${this.bucketName}.files`).deleteMany({ _id: { $in: ids } });
+		await this.db.collection(`${this.bucketName}.chunks`).deleteMany({ files_id: { $in: ids } });
+		return [...new Set(files.map((f) => f.filename))];
 	}
 
 	// TODO: Implement

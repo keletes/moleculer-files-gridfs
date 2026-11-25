@@ -613,10 +613,10 @@
     "@jridgewell/resolve-uri" "^3.1.0"
     "@jridgewell/sourcemap-codec" "^1.4.14"
 
-"@keletes/moleculer-files@^0.3.0":
-  version "0.3.0"
-  resolved "https://npm.pkg.github.com/download/@keletes/moleculer-files/0.3.0/37a25cbcbca6cda2d0c3fb765f5826b5b34c264e#37a25cbcbca6cda2d0c3fb765f5826b5b34c264e"
-  integrity sha512-kAB77Ji9GrLNHxh9mdENp4SVAgcCjX0PA+C3lt++8XeoHOHG1frmUkP5v8/rstyuWBXaAVvGBjKCljjOwyEaKA==
+"@keletes/moleculer-files@^0.5.0":
+  version "0.5.0"
+  resolved "https://npm.pkg.github.com/download/@keletes/moleculer-files/0.5.0/81a507a2c28f9fc4cf075ab9216df1fbe0552a69#81a507a2c28f9fc4cf075ab9216df1fbe0552a69"
+  integrity sha512-o60oUpJpqy/DDQ8oXTmMqsNu+ULND7gIQhHPN08zKGOJt6TEkTkabMCGaPZO8eTDJH6yqllJ69UN/QvtDgLpAw==
   dependencies:
     lodash.get "^4.4.2"
     lodash.set "^4.3.2"
