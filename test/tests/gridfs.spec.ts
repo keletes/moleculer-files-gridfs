@@ -180,7 +180,7 @@ describe("moleculer-files-gridfs", () => {
 			await save("3", { filename: "c.txt", parameters: { color: "*" } });
 		});
 
-		it("filters on file and metadata fields, with $or like business-cad", async () => {
+		it("filters on file and metadata fields", async () => {
 			const rows = (await broker.call("files.find", { filename: "b.txt" })) as { filename: string }[];
 			expect(rows.map((r) => r.filename)).toEqual(["b.txt"]);
 			const or = (await broker.call("files.find", {
