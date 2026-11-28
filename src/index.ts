@@ -5,7 +5,7 @@ import type { CollationOptions, Db, Document, Filter, GridFSFile, MongoClientOpt
 import mime from "mime-types";
 import { Errors } from "moleculer";
 import type { Service, ServiceBroker } from "moleculer";
-import type { AdapterSchema, QueryParams } from "@keletes/moleculer-files";
+import type { AdapterSchema, FileDetails, QueryParams } from "@keletes/moleculer-files";
 
 const { MoleculerError, ServiceSchemaError } = Errors;
 
@@ -169,9 +169,9 @@ export class GridFSAdapter implements AdapterSchema {
 	/**
 	 * Stores the stream as `meta.filename` (else `meta.id`, else a random UUID). An existing name gets a new
 	 * revision: `metadata.version` is the previous one plus one. `meta` becomes the file's `metadata` (and is
-	 * annotated with `version`).
+	 * annotated with `version`). Resolves to the stored revision's details (`id` is its GridFS `_id`).
 	 */
-	async save(entity: NodeJS.ReadableStream, meta: Document = {}): Promise<void> {
+	async save(entity: NodeJS.ReadableStream, meta: Document = {}): Promise<FileDetails> {
 		if (!isReadable(entity)) throw new MoleculerError("Entity is not a stream", 400, "E_BAD_REQUEST");
 
 		const filename = String(meta.filename || meta.id || randomUUID());
@@ -190,6 +190,7 @@ export class GridFSAdapter implements AdapterSchema {
 			await upload.abort().catch(() => undefined);
 			throw err;
 		}
+		return { id: upload.id.toHexString(), filename, contentType, size: upload.length, metadata: meta };
 	}
 
 	/** New revision of the file `id` (moleculer-files passes the id; a metadata object is accepted too). */
