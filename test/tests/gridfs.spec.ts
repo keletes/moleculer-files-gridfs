@@ -101,6 +101,15 @@ describe("moleculer-files-gridfs", () => {
 		expect(revisions.map((f) => f.metadata?.version)).toEqual(["3", "2", "1"]);
 	});
 
+	it("resolves to the stored file's details", async () => {
+		const first = await adapter.save(Readable.from([Buffer.from("abc")]), { filename: "d.txt", owner: "me" });
+		expect(first).toMatchObject({ filename: "d.txt", contentType: "text/plain", size: 3, metadata: { owner: "me", version: "1" } });
+		const second = await adapter.save(Readable.from([Buffer.from("abcd")]), { filename: "d.txt" });
+		expect(second.metadata?.version).toBe("2");
+		expect(second.size).toBe(4);
+		expect(second.id).not.toBe(first.id);
+	});
+
 	it("orders revisions numerically past version 9", async () => {
 		for (let i = 1; i <= 11; i++) await save(`v${i}`, { filename: "many.txt" });
 		expect((await get("many.txt")).toString()).toBe("v11");

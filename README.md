@@ -45,6 +45,7 @@ After connecting, `this.adapter.client`, `.db` and `.bucketFS` are the driver ob
 - **`removeMany(filenames)`.** Used by `removeFiles`: deletes every revision of each filename and its chunks in two bulk deletes; resolves to the filenames that existed, unknown ones are ignored.
 - **`remove`.** By GridFS `_id` (hex string) when one matches, otherwise every revision of the file named `id`. Missing file: 404.
 - **`stat(id)`.** Optional adapter method: `{ filename, contentType, size, metadata }` of the latest revision of the file named `id` (`size` is the GridFS `length`), `undefined` when missing. Metadata is stored as native BSON, so values keep their types and need no encoding.
+- **`save` / `updateById`.** Resolve to the stored revision's `FileDetails`: `id` (its GridFS `_id`, hex), `filename`, `contentType`, `size` (bytes written) and `metadata` (including the `version` set).
 - **Streams.** `save` pipes with backpressure; if the source stream fails the half-written upload (chunks) is aborted. `get` returns the driver's download stream; read errors are emitted on it.
 - `disconnect` closes the MongoDB client.
 
